@@ -10,7 +10,7 @@ PORT = 65432
 
 NEWS_API_KEY = "9d9b66c1e4e04b8a85656fae87e7f1b1"
 BASE_URL = "https://newsapi.org/v2"
-GROUP_ID = "group_X"
+GROUP_ID = "group_8"
 MAX_RESULTS = 15
 
 
@@ -31,8 +31,8 @@ def recv_json(conn):
 
 def fetch_news(endpoint, params):
     params["apiKey"] = NEWS_API_KEY
-    r = requests.get(f"{BASE_URL}/{endpoint}", params=params)
-    return r.json()
+    response = requests.get(f"{BASE_URL}/{endpoint}", params=params)
+    return response.json()
 
 
 def handle_client(conn, addr):
@@ -40,32 +40,71 @@ def handle_client(conn, addr):
     client_name = hello["client_name"]
     print(f"[CONNECTED] {client_name} from {addr}")
 
+    last_results = [] 
+
     while True:
         req = recv_json(conn)
         if not req:
             break
 
-        if req["type"] == "quit":
+        req_type = req["type"]
+
+        if req_type == "quit":
             break
 
+        print(f"[REQUEST] {client_name} | {req_type} | {req.get('params')}")
+
         if req["type"] == "headlines":
-            data = fetch_news("top-headlines", req["params"])
+            data = fetch_news("top-headlines", req.get("params", {}))
             filename = f"{client_name}_headlines_{GROUP_ID}.json"
-            json.dump(data, open(filename, "w"), indent=2)
-
+            with open(filename, "w") as f:
+                json.dump(data, f, indent=2)
             articles = data.get("articles", [])[:MAX_RESULTS]
-            brief = [{"title": a["title"], "source": a["source"]["name"]} for a in articles]
-            send_json(conn, {"type": "list", "items": brief, "full": articles})
+            last_results = articles
+            
+            brief_list = []
+            for i, a in enumerate(articles):
+                brief_list.append({
+                    "id": i,
+                    "title": a.get("title"),
+                    "source": a["source"]["name"],
+                    "author": a.get("author")
+                })
 
-        if req["type"] == "sources":
-            data = fetch_news("top-headlines/sources", req["params"])
+            send_json(conn, {"type": "list", "items": brief_list})
+            
+        elif req_type == "sources":
+            data = fetch_news("top-headlines/sources", req.get("params", {}))
+
             filename = f"{client_name}_sources_{GROUP_ID}.json"
-            json.dump(data, open(filename, "w"), indent=2)
+            with open(filename, "w") as f:
+                json.dump(data, f, indent=2)
 
             sources = data.get("sources", [])[:MAX_RESULTS]
-            brief = [{"name": s["name"]} for s in sources]
-            send_json(conn, {"type": "list", "items": brief, "full": sources})
+            last_results = sources
 
+            brief_list = []
+            for i, s in enumerate(sources):
+                brief_list.append({
+                    "id": i,
+                    "name": s.get("name")
+                })
+
+            send_json(conn, {"type": "list", "items": brief_list})
+        elif req_type == "details":
+            index = req.get("index")
+
+            if 0 <= index < len(last_results):
+                send_json(conn, {
+                    "type": "details",
+                    "item": last_results[index]
+                })
+            else:
+                send_json(conn, {
+                    "type": "error",
+                    "message": "Invalid selection"
+                })
+                
     conn.close()
     print(f"[DISCONNECTED] {client_name}")
 
@@ -83,3 +122,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
