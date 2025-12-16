@@ -15,7 +15,7 @@ S1 2025–2026
 ## Group Information
 - Group Name: GB8
 - Course: ITNE352 – Network Programming
-- Section: 25261
+- Section: 2
 - Student 1: Sarah Khalid 202102356
 - Student 2: Ayah Hasan 202306851
 
